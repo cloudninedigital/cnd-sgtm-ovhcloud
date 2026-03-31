@@ -1,0 +1,57 @@
+# Copy this file to terraform.tfvars and fill in all required values.
+# Do NOT commit terraform.tfvars to version control – it contains secrets.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OVHCloud credentials
+# Obtain these from: https://www.ovh.com/auth/api/createToken
+# ─────────────────────────────────────────────────────────────────────────────
+ovh_endpoint           = "ovh-eu"                   # ovh-eu | ovh-us | ovh-ca
+ovh_application_key    = "REPLACE_WITH_APP_KEY"
+ovh_application_secret = "REPLACE_WITH_APP_SECRET"
+ovh_consumer_key       = "REPLACE_WITH_CONSUMER_KEY"
+
+# OVHCloud project ID – visible in the URL of your project in the OVH Control Panel
+ovh_cloud_project_service = "REPLACE_WITH_PROJECT_ID"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cluster settings
+# ─────────────────────────────────────────────────────────────────────────────
+region             = "GRA7"          # OVH region: GRA7, DE1, UK1, BHS5, WAW1, SBG5 …
+cluster_name       = "sgtm-cluster"
+kubernetes_version = ""              # Leave empty for latest OVHCloud default (e.g. "1.29")
+node_flavor        = "b3-8"          # Instance flavor: b3-8, b3-16, b3-32 …
+
+# Auto-scaling node pool bounds
+node_pool_min_nodes     = 1
+node_pool_max_nodes     = 3
+node_pool_desired_nodes = 2
+
+# ─────────────────────────────────────────────────────────────────────────────
+# sGTM general settings
+# ─────────────────────────────────────────────────────────────────────────────
+namespace        = "sgtm"
+sgtm_image       = "gcr.io/cloud-tagging-10302018/gtm-cloud-image:stable"
+
+# Paste the container config string from your GTM server container:
+#   Google Tag Manager → Admin → Container Settings → Container config
+container_config = "REPLACE_WITH_GTM_CONTAINER_CONFIG"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tagging server
+# ─────────────────────────────────────────────────────────────────────────────
+tagging_server_min_replicas            = 2
+tagging_server_max_replicas            = 10
+tagging_server_cpu_request             = "250m"
+tagging_server_cpu_limit               = "1000m"
+tagging_server_memory_request          = "256Mi"
+tagging_server_memory_limit            = "512Mi"
+tagging_server_cpu_target_utilization  = 70
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Preview server
+# ─────────────────────────────────────────────────────────────────────────────
+preview_server_replicas       = 1
+preview_server_cpu_request    = "100m"
+preview_server_cpu_limit      = "500m"
+preview_server_memory_request = "128Mi"
+preview_server_memory_limit   = "256Mi"
