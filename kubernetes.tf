@@ -2,6 +2,10 @@
 # Namespace
 # ─────────────────────────────────────────────────────────────────────────────
 
+locals {
+  effective_preview_server_url = var.enable_https_ingress ? "https://${var.preview_server_host}" : var.preview_server_url
+}
+
 resource "kubernetes_namespace_v1" "sgtm" {
   depends_on = [ovh_cloud_project_kube_nodepool.sgtm_nodepool]
 
@@ -81,7 +85,7 @@ resource "kubernetes_deployment_v1" "preview_server" {
 
           liveness_probe {
             http_get {
-              path = "/healthz"
+              path = "/healthy"
               port = 8080
             }
             initial_delay_seconds = 10
@@ -90,7 +94,7 @@ resource "kubernetes_deployment_v1" "preview_server" {
 
           readiness_probe {
             http_get {
-              path = "/healthz"
+              path = "/healthy"
               port = 8080
             }
             initial_delay_seconds = 5
@@ -132,6 +136,46 @@ resource "kubernetes_service_v1" "preview_server" {
     }
 
     type = "ClusterIP"
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Preview server – Public LoadBalancer Service (optional)
+# ─────────────────────────────────────────────────────────────────────────────
+
+resource "kubernetes_service_v1" "preview_server_lb" {
+  count = var.preview_server_public_enabled ? 1 : 0
+
+  depends_on = [kubernetes_namespace_v1.sgtm]
+
+  metadata {
+    name      = "preview-server-lb"
+    namespace = kubernetes_namespace_v1.sgtm.metadata[0].name
+    labels = {
+      app       = "sgtm"
+      component = "preview-server"
+    }
+    annotations = {}
+  }
+
+  spec {
+    selector = {
+      app       = "sgtm"
+      component = "preview-server"
+    }
+
+    port {
+      port        = 80
+      target_port = 8080
+      protocol    = "TCP"
+      name        = "http"
+    }
+
+    type = "LoadBalancer"
+  }
+
+  timeouts {
+    create = "10m"
   }
 }
 
@@ -186,10 +230,10 @@ resource "kubernetes_deployment_v1" "tagging_server" {
             value = var.container_config
           }
 
-          # Point the tagging server at the in-cluster preview server service.
+          # The tagging server requires a valid HTTPS preview URL.
           env {
             name  = "PREVIEW_SERVER_URL"
-            value = "http://${kubernetes_service_v1.preview_server.metadata[0].name}.${kubernetes_namespace_v1.sgtm.metadata[0].name}.svc.cluster.local"
+            value = local.effective_preview_server_url
           }
 
           resources {
@@ -205,7 +249,7 @@ resource "kubernetes_deployment_v1" "tagging_server" {
 
           liveness_probe {
             http_get {
-              path = "/healthz"
+              path = "/healthy"
               port = 8080
             }
             initial_delay_seconds = 10
@@ -214,7 +258,7 @@ resource "kubernetes_deployment_v1" "tagging_server" {
 
           readiness_probe {
             http_get {
-              path = "/healthz"
+              path = "/healthy"
               port = 8080
             }
             initial_delay_seconds = 5

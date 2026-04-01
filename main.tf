@@ -17,6 +17,15 @@ provider "kubernetes" {
   cluster_ca_certificate = base64decode(data.ovh_cloud_project_kube.sgtm_cluster.kubeconfig_attributes[0].cluster_ca_certificate)
 }
 
+provider "helm" {
+  kubernetes {
+    host                   = data.ovh_cloud_project_kube.sgtm_cluster.kubeconfig_attributes[0].host
+    client_certificate     = base64decode(data.ovh_cloud_project_kube.sgtm_cluster.kubeconfig_attributes[0].client_certificate)
+    client_key             = base64decode(data.ovh_cloud_project_kube.sgtm_cluster.kubeconfig_attributes[0].client_key)
+    cluster_ca_certificate = base64decode(data.ovh_cloud_project_kube.sgtm_cluster.kubeconfig_attributes[0].cluster_ca_certificate)
+  }
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Managed Kubernetes cluster
 # ─────────────────────────────────────────────────────────────────────────────

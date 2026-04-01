@@ -99,6 +99,74 @@ variable "container_config" {
   sensitive   = true
 }
 
+variable "enable_https_ingress" {
+  description = "Install ingress-nginx and cert-manager, then expose tagging and preview servers via HTTPS Ingress."
+  type        = bool
+  default     = false
+}
+
+variable "letsencrypt_email" {
+  description = "Email address used for the Let's Encrypt ACME account when enable_https_ingress is true."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.enable_https_ingress || (var.letsencrypt_email != "" && can(regex("@", var.letsencrypt_email)))
+    error_message = "When enable_https_ingress is true, letsencrypt_email must be set to a valid email address."
+  }
+}
+
+variable "tagging_server_host" {
+  description = "Public DNS host for the tagging server HTTPS endpoint (for example sgtm.example.com)."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.enable_https_ingress || var.tagging_server_host != ""
+    error_message = "When enable_https_ingress is true, tagging_server_host must be set."
+  }
+}
+
+variable "preview_server_host" {
+  description = "Public DNS host for the preview server HTTPS endpoint (for example preview.example.com)."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.enable_https_ingress || var.preview_server_host != ""
+    error_message = "When enable_https_ingress is true, preview_server_host must be set."
+  }
+}
+
+variable "ingress_nginx_namespace" {
+  description = "Namespace where ingress-nginx is installed when enable_https_ingress is true."
+  type        = string
+  default     = "ingress-nginx"
+}
+
+variable "cert_manager_namespace" {
+  description = "Namespace where cert-manager is installed when enable_https_ingress is true."
+  type        = string
+  default     = "cert-manager"
+}
+
+variable "ingress_class_name" {
+  description = "IngressClass name used by the HTTPS ingress resources."
+  type        = string
+  default     = "nginx"
+}
+
+variable "preview_server_url" {
+  description = "HTTPS URL of the preview server used by tagging-server pods (for example https://preview.example.com)."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.enable_https_ingress || can(regex("^https://", var.preview_server_url))
+    error_message = "Set preview_server_url to a real HTTPS URL (e.g. https://preview.example.com), or enable_https_ingress=true."
+  }
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Tagging server
 # ─────────────────────────────────────────────────────────────────────────────
@@ -153,6 +221,12 @@ variable "preview_server_replicas" {
   description = "Number of preview server pod replicas."
   type        = number
   default     = 1
+}
+
+variable "preview_server_public_enabled" {
+  description = "Whether to create a public LoadBalancer service for the preview server."
+  type        = bool
+  default     = true
 }
 
 variable "preview_server_cpu_request" {

@@ -2,6 +2,7 @@
 *.tfstate
 *.tfstate.*
 .terraform/
+.terraform.lock.hcl
 
 # Local variable overrides – may contain secrets
 terraform.tfvars
