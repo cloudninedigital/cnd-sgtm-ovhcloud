@@ -125,6 +125,11 @@ variable "tagging_server_host" {
     condition     = !var.enable_https_ingress || var.tagging_server_host != ""
     error_message = "When enable_https_ingress is true, tagging_server_host must be set."
   }
+
+  validation {
+    condition = var.tagging_server_host == "" || can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$", var.tagging_server_host))
+    error_message = "tagging_server_host must be a valid lowercase RFC1123 hostname using only letters, numbers, hyphens, and dots. Underscores are not allowed."
+  }
 }
 
 variable "preview_server_host" {
@@ -135,6 +140,11 @@ variable "preview_server_host" {
   validation {
     condition     = !var.enable_https_ingress || var.preview_server_host != ""
     error_message = "When enable_https_ingress is true, preview_server_host must be set."
+  }
+
+  validation {
+    condition = var.preview_server_host == "" || can(regex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$", var.preview_server_host))
+    error_message = "preview_server_host must be a valid lowercase RFC1123 hostname using only letters, numbers, hyphens, and dots. Underscores are not allowed."
   }
 }
 
@@ -154,6 +164,12 @@ variable "ingress_class_name" {
   description = "IngressClass name used by the HTTPS ingress resources."
   type        = string
   default     = "nginx"
+}
+
+variable "create_letsencrypt_cluster_issuer" {
+  description = "Create the cert-manager ClusterIssuer. Keep false on first deploy so plan does not fail before cert-manager CRDs exist; enable after initial apply."
+  type        = bool
+  default     = false
 }
 
 variable "preview_server_url" {
@@ -211,6 +227,12 @@ variable "tagging_server_cpu_target_utilization" {
   description = "Target average CPU utilisation percentage that triggers HPA scaling."
   type        = number
   default     = 70
+}
+
+variable "defer_tagging_server_rollout" {
+  description = "When true, keep tagging-server at 0 replicas and disable its HPA. Use this for first apply while preview DNS/TLS is being prepared."
+  type        = bool
+  default     = false
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -40,7 +40,7 @@ resource "helm_release" "cert_manager" {
 
   set = [
     {
-      name  = "crds.enabled"
+      name  = "installCRDs"
       value = "true"
     }
   ]
@@ -48,8 +48,16 @@ resource "helm_release" "cert_manager" {
   depends_on = [helm_release.ingress_nginx]
 }
 
-resource "kubernetes_manifest" "letsencrypt_cluster_issuer" {
+resource "time_sleep" "wait_for_cert_manager_crds" {
   count = var.enable_https_ingress ? 1 : 0
+
+  create_duration = "30s"
+
+  depends_on = [helm_release.cert_manager]
+}
+
+resource "kubernetes_manifest" "letsencrypt_cluster_issuer" {
+  count = var.enable_https_ingress && var.create_letsencrypt_cluster_issuer ? 1 : 0
 
   manifest = {
     apiVersion = "cert-manager.io/v1"
@@ -77,7 +85,7 @@ resource "kubernetes_manifest" "letsencrypt_cluster_issuer" {
     }
   }
 
-  depends_on = [helm_release.cert_manager]
+  depends_on = [time_sleep.wait_for_cert_manager_crds]
 }
 
 resource "kubernetes_ingress_v1" "tagging_server" {
@@ -120,7 +128,7 @@ resource "kubernetes_ingress_v1" "tagging_server" {
     }
   }
 
-  depends_on = [kubernetes_manifest.letsencrypt_cluster_issuer]
+  depends_on = [helm_release.cert_manager]
 }
 
 resource "kubernetes_ingress_v1" "preview_server" {
@@ -164,7 +172,7 @@ resource "kubernetes_ingress_v1" "preview_server" {
     }
   }
 
-  depends_on = [kubernetes_manifest.letsencrypt_cluster_issuer]
+  depends_on = [helm_release.cert_manager]
 }
 
 data "kubernetes_service_v1" "ingress_nginx_controller" {

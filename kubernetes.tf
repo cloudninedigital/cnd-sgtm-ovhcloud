@@ -197,7 +197,7 @@ resource "kubernetes_deployment_v1" "tagging_server" {
 
   spec {
     # Initial replica count – the HPA will take over after apply.
-    replicas = var.tagging_server_min_replicas
+    replicas = var.defer_tagging_server_rollout ? 0 : var.tagging_server_min_replicas
 
     selector {
       match_labels = {
@@ -323,6 +323,8 @@ resource "kubernetes_service_v1" "tagging_server_lb" {
 # ─────────────────────────────────────────────────────────────────────────────
 
 resource "kubernetes_horizontal_pod_autoscaler_v2" "tagging_server" {
+  count = var.defer_tagging_server_rollout ? 0 : 1
+
   depends_on = [kubernetes_deployment_v1.tagging_server]
 
   metadata {

@@ -74,13 +74,29 @@ enable_https_ingress = true
 letsencrypt_email    = "ops@example.com"
 tagging_server_host  = "sgtm.example.com"
 preview_server_host  = "preview.example.com"
+create_letsencrypt_cluster_issuer = false
 ```
+
+Then run a second apply with `create_letsencrypt_cluster_issuer = true`.
+This two-phase flow avoids Kubernetes provider plan-time CRD discovery errors
+on brand-new clusters.
 
 Then point both DNS A records (`sgtm.example.com`, `preview.example.com`) to the
 `ingress_controller_load_balancer_ip` output and wait for certificate issuance.
 
 When `enable_https_ingress = true`, the tagging-server automatically uses
 `https://<preview_server_host>` for `PREVIEW_SERVER_URL`.
+
+### First deployment without preview DNS/TLS ready
+
+If this is your first deployment and preview DNS/TLS is not ready yet, set:
+
+```hcl
+defer_tagging_server_rollout = true
+```
+
+Apply once to provision cluster/services/ingress and certificates. After preview
+HTTPS is reachable, set it back to `false` and apply again to start tagging pods.
 
 After a successful apply, Terraform outputs the **load balancer IP address**:
 
@@ -125,10 +141,12 @@ A fully annotated example is provided in [`terraform.tfvars.example`](./terrafor
 | `tagging_server_max_replicas` | `10` | Max tagging server pods |
 | `tagging_server_cpu_limit` | `1000m` | CPU limit per tagging pod |
 | `tagging_server_memory_limit` | `512Mi` | Memory limit per tagging pod |
+| `defer_tagging_server_rollout` | `false` | Keep tagging-server at 0 replicas and disable HPA during first-time bootstrap |
 | `enable_https_ingress` | `false` | Install ingress-nginx and cert-manager and expose HTTPS endpoints |
 | `letsencrypt_email` | `""` | Email for Let's Encrypt ACME registration (required when HTTPS ingress is enabled) |
 | `tagging_server_host` | `""` | DNS host for tagging-server HTTPS endpoint (required when HTTPS ingress is enabled) |
 | `preview_server_host` | `""` | DNS host for preview-server HTTPS endpoint (required when HTTPS ingress is enabled) |
+| `create_letsencrypt_cluster_issuer` | `false` | Create cert-manager ClusterIssuer; set to true after first apply |
 | `preview_server_public_enabled` | `true` | Create an OVH public LoadBalancer service for preview-server |
 | `preview_server_replicas` | `1` | Preview server pod count |
 
