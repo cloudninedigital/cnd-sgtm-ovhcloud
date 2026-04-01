@@ -15,7 +15,7 @@ output "kubernetes_version" {
 
 output "tagging_server_load_balancer_ip" {
   description = "Public IP address of the tagging server load balancer. Map this to an A record in your DNS configuration."
-  value       = try(kubernetes_service_v1.tagging_server_lb.status[0].load_balancer[0].ingress[0].ip, "pending – check 'kubectl get svc -n ${var.namespace} tagging-server-lb'")
+  value       =  !var.enable_https_ingress ? try(kubernetes_service_v1.tagging_server_lb.status[0].load_balancer[0].ingress[0].ip, "pending – check 'kubectl get svc -n ${var.namespace} tagging-server-lb'") : "disabled"
 }
 
 output "tagging_server_public_url" {
@@ -39,7 +39,7 @@ output "preview_server_cluster_ip" {
 
 output "preview_server_load_balancer_ip" {
   description = "Public IP address of the preview server load balancer when enabled."
-  value = var.preview_server_public_enabled ? try(
+  value = var.preview_server_public_enabled && !var.enable_https_ingress ? try(
     kubernetes_service_v1.preview_server_lb[0].status[0].load_balancer[0].ingress[0].ip,
     "pending - check 'kubectl get svc -n ${var.namespace} preview-server-lb'"
   ) : "disabled"

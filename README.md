@@ -9,19 +9,20 @@ Terraform template for deploying **Server-side Google Tag Manager (sGTM)** into
                       ┌─────────────────────────────────────────┐
                       │           OVHCloud OKS Cluster           │
                       │                                          │
-DNS A record ──────►  │  LoadBalancer ──► Tagging Server Pods   │
-(sgtm.example.com)    │                        │                 │
+DNS A records ──────► ingress-nginx ──► Tagging Server Pods   │
+(via SNI+Host)    LoadBalancer          │ (auto-scaling)       │
                       │                        │ cluster-internal│
-                      │                   Preview Server Pod     │
+                      │ (TLS termination)  Preview Server Pod    │
                       └─────────────────────────────────────────┘
 ```
 
 | Component | Description |
 |-----------|-------------|
-| **Tagging server** | Main sGTM endpoint. Exposed via a cloud load balancer. Auto-scales with HPA. |
-| **Preview server** | Handles GTM preview/debug sessions. ClusterIP by default, with optional public OVH load balancer service. |
-| **Ingress + TLS (optional)** | Installs ingress-nginx and cert-manager, then provisions Let's Encrypt certificates for HTTPS endpoints. |
-| **HorizontalPodAutoscaler** | Scales tagging-server pods between `min` and `max` replicas based on CPU utilisation. |
+| **Ingress controller (ingress-nginx)** | Public LoadBalancer exposing HTTPS endpoints. Handles TLS termination and host-based routing. |
+| **Tagging server** | Main sGTM endpoint at `tagging_server_host`. Auto-scales with HPA based on CPU utilization. |
+| **Preview server** | Handles GTM preview/debug sessions at `preview_server_host`. Single pod with internal ClusterIP routing. |
+| **cert-manager + Let's Encrypt** | Automatically provisions and renews SSL certificates. No manual certificate management required. |
+| **HorizontalPodAutoscaler** | Scales tagging-server pods between `tagging_server_min_replicas` and `tagging_server_max_replicas` based on CPU utilization. |
 | **Node pool** | OVHCloud managed worker node pool with auto-scaling enabled. |
 
 ## Prerequisites
@@ -46,6 +47,19 @@ DELETE /cloud/project/*
 
 ## Quick Start
 
+This template deploys **production-ready HTTPS endpoints** with automatic SSL certificates 
+from Let's Encrypt. The setup uses a two-phase deployment pattern to work reliably with 
+Kubernetes cluster bootstrapping.
+
+### Prerequisites for HTTPS deployment
+
+Before starting, ensure you have:
+- **DNS zone** configured where you can create A records
+- **Email address** for Let's Encrypt (no signup required – certificates are issued automatically)
+- **OVH API credentials** with appropriate permissions (see [OVH API token permissions](#ovh-api-token-permissions-required))
+
+### Step 1: Clone and configure
+
 ```bash
 # 1. Clone this repository
 git clone https://github.com/cloudninedigital/cnd-sgtm-ovhcloud.git
@@ -53,62 +67,134 @@ cd cnd-sgtm-ovhcloud
 
 # 2. Create your variable file
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars and fill in all REPLACE_WITH_* placeholders
 
-# 3. Initialise Terraform
+# 3. Edit terraform.tfvars and fill in all REPLACE_WITH_* placeholders, including:
+#    - OVH credentials (ovh_application_key, ovh_application_secret, ovh_consumer_key)
+#    - GTM container config string
+#    - Your email address for letsencrypt_email
+#    - Two DNS hostnames for tagging_server_host and preview_server_host
+```
+
+### Step 2: Initial infrastructure and certificate provisioning (Create CRDs)
+
+```bash
+# 4. Initialise Terraform
 terraform init
 
-# 4. Review the execution plan
-terraform plan
-
-# 5. Apply
+# 5. First apply: sets up cluster, services, ingress-nginx, and cert-manager
+#    BUT DOES NOT create certificates yet (CRDs need time to register)
 terraform apply
 ```
 
-### Optional: automatic HTTPS endpoints via Terraform
+**What happens:** Kubernetes cluster, node pool, ingress-nginx, and cert-manager are 
+provisioned. However, Let's Encrypt ClusterIssuer is NOT created yet because the cert-manager 
+CustomResourceDefinitions (CRDs) need additional time to register after first install.
 
-Set these variables in `terraform.tfvars` before `terraform apply`:
+**After Step 2 completes:**
+- Go to your DNS provider and create **two A records** pointing to the ingress controller's public IP 
+  (shown in Terraform output as `ingress_controller_load_balancer_ip`):
+  - `tagging_server_host` → ingress IP
+  - `preview_server_host` → ingress IP
 
-```hcl
-enable_https_ingress = true
-letsencrypt_email    = "ops@example.com"
-tagging_server_host  = "sgtm.example.com"
-preview_server_host  = "preview.example.com"
-create_letsencrypt_cluster_issuer = false
+For example:
+```
+sst-ovh-tagging.cloudninedigital.nl    →  51.x.x.x
+sst-ovh-preview.cloudninedigital.nl   →  51.x.x.x
 ```
 
-Then run a second apply with `create_letsencrypt_cluster_issuer = true`.
-This two-phase flow avoids Kubernetes provider plan-time CRD discovery errors
-on brand-new clusters.
+### Step 3: Enable certificate issuer (Activate Let's Encrypt)
 
-Then point both DNS A records (`sgtm.example.com`, `preview.example.com`) to the
-`ingress_controller_load_balancer_ip` output and wait for certificate issuance.
+```bash
+# 6. Edit terraform.tfvars: change create_letsencrypt_cluster_issuer from false to true
+#    create_letsencrypt_cluster_issuer = true
 
-When `enable_https_ingress = true`, the tagging-server automatically uses
-`https://<preview_server_host>` for `PREVIEW_SERVER_URL`.
+# 7. Second apply: creates Let's Encrypt ClusterIssuer and Ingress certificates
+terraform apply
+```
 
-### First deployment without preview DNS/TLS ready
+**What happens:** The Let's Encrypt ClusterIssuer is created and cert-manager automatically 
+requests SSL certificates for both your DNS hostnames. Let's Encrypt validates DNS ownership 
+(using HTTP-01 challenges) and issues certificates. **No manual signup is required** – the 
+`letsencrypt_email` address is used for account registration automatically.
 
-If this is your first deployment and preview DNS/TLS is not ready yet, set:
+**After Step 3 completes:**
+- Certificates will be provisioned automatically (usually within 30 seconds)
+- Both your tagging server and preview server are now accessible via HTTPS
+- Your sGTM container automatically detects the preview server HTTPS URL and configures it
+
+Verify certificate status:
+```bash
+kubectl get certificate -n sgtm
+kubectl describe certificate tagging-server-tls -n sgtm
+```
+
+### Step 3 alternative: First deployment while DNS is being prepared
+
+If you need to start deployment while DNS isn't ready yet, add a deferral flag to the initial 
+configuration:
 
 ```hcl
+# In terraform.tfvars during first apply:
 defer_tagging_server_rollout = true
 ```
 
-Apply once to provision cluster/services/ingress and certificates. After preview
-HTTPS is reachable, set it back to `false` and apply again to start tagging pods.
+This keeps the tagging-server at 0 replicas and disables HPA until you're ready. After HTTPS 
+is confirmed working (Step 3 complete, certificates issued), set it back to `false` and apply 
+again to activate your tagging server pods.
 
-After a successful apply, Terraform outputs the **load balancer IP address**:
+## Understanding the Two-Phase Deployment Pattern
 
-```
-tagging_server_load_balancer_ip = "51.x.x.x"
-```
+### Why two phases?
 
-Create an **A record** in your DNS zone pointing your sGTM subdomain to that IP:
+Kubernetes has a limitation with **CustomResourceDefinitions (CRDs)**: When cert-manager is 
+first installed, its CRD definitions need time to fully register in the cluster before other 
+resources can reliably reference them. If you try to create a `ClusterIssuer` (which uses a 
+cert-manager CRD) immediately in the same Terraform apply, the Kubernetes provider may fail 
+during planning because it can't yet discover the CRD schema.
 
+The two-phase pattern solves this:
+1. **Phase 1 (first `terraform apply`):** Install ingress-nginx and cert-manager, let CRDs register
+2. **Phase 2 (second `terraform apply`):** Create the ClusterIssuer and configure certificates
+
+### About the `letsencrypt_email` address
+
+The email address provided in `letsencrypt_email` is used by Let's Encrypt for:
+- **Account registration** (entirely automatic – no manual signup at letsencrypt.org is required)
+- **Certificate renewal reminders** (sent as certificates approach expiration)
+- **Security notices** (if suspicious activity is detected)
+
+You do **not** need to pre-register or create an account with Let's Encrypt. The cert-manager 
+automatically handles all ACME protocol interactions when requesting certificates.
+
+### If you need to defer the tagging server
+
+The `defer_tagging_server_rollout` flag is useful if you want to verify that the preview 
+HTTPS endpoint is working before starting tagging-server pods. Here's the workflow:
+
+```hcl
+# First two phases with deferred startup:
+defer_tagging_server_rollout = true
+create_letsencrypt_cluster_issuer = false  # Phase 1
 ```
-sgtm.example.com  →  51.x.x.x
+→ `terraform apply`  (deploys cluster, ingress, cert-manager)
+
+Then update DNS A records and wait for certificates to be issued.
+
+```hcl
+# Phase 2 after DNS is ready:
+defer_tagging_server_rollout = true
+create_letsencrypt_cluster_issuer = true  # Enable issuer
 ```
+→ `terraform apply`  (creates certificates)
+
+Verify preview works with `https://preview_server_host` in your browser.
+
+```hcl
+# Phase 3 after preview is confirmed working:
+defer_tagging_server_rollout = false  # Enable tagging server
+create_letsencrypt_cluster_issuer = true
+```
+→ `terraform apply`  (starts tagging-server pods)
 
 ## Variables
 
@@ -124,7 +210,9 @@ A fully annotated example is provided in [`terraform.tfvars.example`](./terrafor
 | `ovh_consumer_key` | OVH API consumer key |
 | `ovh_cloud_project_service` | OVHCloud project ID |
 | `container_config` | sGTM container config string from GTM UI |
-| `preview_server_url` | Public HTTPS URL of your preview server (required when `enable_https_ingress = false`) |
+| `letsencrypt_email` | Email address for Let's Encrypt ACME (no signup required – automatic) |
+| `tagging_server_host` | DNS hostname for your sGTM tagging server (e.g., `sst-ovh-tagging.cloudninedigital.nl`) |
+| `preview_server_host` | DNS hostname for your sGTM preview server (e.g., `sst-ovh-preview.cloudninedigital.nl`) |
 
 ### Key optional variables (with defaults)
 
@@ -141,31 +229,28 @@ A fully annotated example is provided in [`terraform.tfvars.example`](./terrafor
 | `tagging_server_max_replicas` | `10` | Max tagging server pods |
 | `tagging_server_cpu_limit` | `1000m` | CPU limit per tagging pod |
 | `tagging_server_memory_limit` | `512Mi` | Memory limit per tagging pod |
-| `defer_tagging_server_rollout` | `false` | Keep tagging-server at 0 replicas and disable HPA during first-time bootstrap |
-| `enable_https_ingress` | `false` | Install ingress-nginx and cert-manager and expose HTTPS endpoints |
-| `letsencrypt_email` | `""` | Email for Let's Encrypt ACME registration (required when HTTPS ingress is enabled) |
-| `tagging_server_host` | `""` | DNS host for tagging-server HTTPS endpoint (required when HTTPS ingress is enabled) |
-| `preview_server_host` | `""` | DNS host for preview-server HTTPS endpoint (required when HTTPS ingress is enabled) |
-| `create_letsencrypt_cluster_issuer` | `false` | Create cert-manager ClusterIssuer; set to true after first apply |
-| `preview_server_public_enabled` | `true` | Create an OVH public LoadBalancer service for preview-server |
 | `preview_server_replicas` | `1` | Preview server pod count |
+| `preview_server_public_enabled` | `true` | Create an OVH public LoadBalancer service for preview-server (redundant when HTTPS ingress enabled) |
+| `defer_tagging_server_rollout` | `false` | Set to `true` if DNS/TLS not ready on first deploy – keeps tagging-server at 0 replicas until Step 3 is complete |
+| `create_letsencrypt_cluster_issuer` | `false` | **Phase 2 toggle:** Set to `true` on second apply to activate Let's Encrypt certificate provisioning |
+| `preview_server_url` | `""` | (Deprecated) Only used if HTTPS ingress is manually disabled; use hostnames instead |
 
 ## Outputs
 
 | Output | Description |
 |--------|-------------|
-| `tagging_server_load_balancer_ip` | Public IP – set this as your DNS A record target |
-| `tagging_server_public_url` | Public URL for immediate testing (LB hostname when available, else nip.io placeholder) |
-| `tagging_server_https_url` | HTTPS URL for tagging server when HTTPS ingress is enabled |
+| `ingress_controller_load_balancer_ip` | **Primary:** Public IP of ingress-nginx controller; set your DNS A records to point here (Step 2) |
+| `ingress_controller_load_balancer_hostname` | Public hostname of ingress-nginx controller when OVHCloud returns one |
+| `tagging_server_https_url` | HTTPS endpoint for tagging server (available after certificates are issued in Step 3) |
+| `preview_server_https_url` | HTTPS endpoint for preview server (available after certificates are issued in Step 3) |
+| `tagging_server_load_balancer_ip` | (Deprecated) Legacy IP for standalone tagging LB service; use ingress IP instead |
+| `tagging_server_public_url` | (Deprecated) Legacy URL via standalone LB; use ingress HTTPS URL instead |
+| `preview_server_load_balancer_ip` | (Deprecated) Legacy IP for standalone preview LB service; use ingress IP instead |
 | `preview_server_cluster_ip` | Internal cluster IP of the preview server |
-| `preview_server_load_balancer_ip` | Public IP of the preview-server LB (when enabled) |
-| `preview_server_public_url` | Public preview URL placeholder for testing (HTTP; configure DNS+TLS for production) |
-| `preview_server_https_url` | HTTPS URL for preview server when HTTPS ingress is enabled |
-| `ingress_controller_load_balancer_ip` | Public IP of ingress-nginx controller; DNS A records should point here |
-| `ingress_controller_load_balancer_hostname` | Public hostname of ingress-nginx controller when provider returns hostname |
+| `preview_server_public_url` | (Deprecated) Legacy URL via standalone LB; use ingress HTTPS URL instead |
 | `cluster_id` | OVHCloud cluster ID |
 | `kubernetes_version` | Running Kubernetes version |
-| `namespace` | Kubernetes namespace used |
+| `namespace` | Kubernetes namespace used (default: `sgtm`) |
 
 ## Destroying the infrastructure
 
