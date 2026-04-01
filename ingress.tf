@@ -11,20 +11,20 @@ resource "helm_release" "ingress_nginx" {
   namespace        = var.ingress_nginx_namespace
   create_namespace = true
 
-  set {
-    name  = "controller.service.type"
-    value = "LoadBalancer"
-  }
-
-  set {
-    name  = "controller.ingressClassResource.name"
-    value = var.ingress_class_name
-  }
-
-  set {
-    name  = "controller.ingressClass"
-    value = var.ingress_class_name
-  }
+  set = [
+    {
+      name  = "controller.service.type"
+      value = "LoadBalancer"
+    },
+    {
+      name  = "controller.ingressClassResource.name"
+      value = var.ingress_class_name
+    },
+    {
+      name  = "controller.ingressClass"
+      value = var.ingress_class_name
+    }
+  ]
 
   depends_on = [ovh_cloud_project_kube_nodepool.sgtm_nodepool]
 }
@@ -38,10 +38,12 @@ resource "helm_release" "cert_manager" {
   namespace        = var.cert_manager_namespace
   create_namespace = true
 
-  set {
-    name  = "crds.enabled"
-    value = "true"
-  }
+  set = [
+    {
+      name  = "crds.enabled"
+      value = "true"
+    }
+  ]
 
   depends_on = [helm_release.ingress_nginx]
 }

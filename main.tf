@@ -18,7 +18,7 @@ provider "kubernetes" {
 }
 
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     host                   = data.ovh_cloud_project_kube.sgtm_cluster.kubeconfig_attributes[0].host
     client_certificate     = base64decode(data.ovh_cloud_project_kube.sgtm_cluster.kubeconfig_attributes[0].client_certificate)
     client_key             = base64decode(data.ovh_cloud_project_kube.sgtm_cluster.kubeconfig_attributes[0].client_key)
