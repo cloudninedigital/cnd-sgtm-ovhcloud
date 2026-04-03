@@ -132,7 +132,7 @@ kubectl get certificate -n sgtm
 kubectl describe certificate tagging-server-tls -n sgtm
 ```
 
-### Optional Step 4: Activate tagging-server after TLS is confirmed
+### Step 4: Activate tagging-server after TLS is confirmed
 
 If `defer_tagging_server_rollout = true` during bootstrap, tagging-server stays at 0 replicas 
 until you explicitly enable it.
