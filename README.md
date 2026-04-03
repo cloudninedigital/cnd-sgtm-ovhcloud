@@ -51,6 +51,10 @@ This template deploys **production-ready HTTPS endpoints** with automatic SSL ce
 from Let's Encrypt. The setup uses a two-phase deployment pattern to work reliably with 
 Kubernetes cluster bootstrapping.
 
+In practice, deployment is:
+- **2 applies** when `defer_tagging_server_rollout = false`
+- **3 applies** when `defer_tagging_server_rollout = true` (recommended for first-time bootstrap)
+
 ### Prerequisites for HTTPS deployment
 
 Before starting, ensure you have:
@@ -128,23 +132,22 @@ kubectl get certificate -n sgtm
 kubectl describe certificate tagging-server-tls -n sgtm
 ```
 
-### Step 3 alternative: First deployment while DNS is being prepared
+### Optional Step 4: Activate tagging-server after TLS is confirmed
 
-If you need to start deployment while DNS isn't ready yet, add a deferral flag to the initial 
-configuration:
+If `defer_tagging_server_rollout = true` during bootstrap, tagging-server stays at 0 replicas 
+until you explicitly enable it.
 
-```hcl
-# In terraform.tfvars during first apply:
-defer_tagging_server_rollout = true
+```bash
+# 8. Edit terraform.tfvars
+#    defer_tagging_server_rollout = false
+
+# 9. Third apply (only needed when rollout was deferred)
+terraform apply
 ```
 
-This keeps the tagging-server at 0 replicas and disables HPA until you're ready. After HTTPS 
-is confirmed working (Step 3 complete, certificates issued), set it back to `false` and apply 
-again to activate your tagging server pods.
+## Understanding the Phase Pattern
 
-## Understanding the Two-Phase Deployment Pattern
-
-### Why two phases?
+### Why there can be two or three applies
 
 Kubernetes has a limitation with **CustomResourceDefinitions (CRDs)**: When cert-manager is 
 first installed, its CRD definitions need time to fully register in the cluster before other 
@@ -152,9 +155,24 @@ resources can reliably reference them. If you try to create a `ClusterIssuer` (w
 cert-manager CRD) immediately in the same Terraform apply, the Kubernetes provider may fail 
 during planning because it can't yet discover the CRD schema.
 
-The two-phase pattern solves this:
-1. **Phase 1 (first `terraform apply`):** Install ingress-nginx and cert-manager, let CRDs register
-2. **Phase 2 (second `terraform apply`):** Create the ClusterIssuer and configure certificates
+The base pattern is two applies because of cert-manager CRD registration timing:
+1. **Phase 1 (first `terraform apply`)**
+2. **Phase 2 (second `terraform apply`)**
+
+If you also defer tagging rollout for safer bootstrap, there is one additional apply:
+3. **Phase 3 (third `terraform apply`)**
+
+### Phase-by-phase switch values
+
+| Phase | `create_letsencrypt_cluster_issuer` | `defer_tagging_server_rollout` | Result |
+|------|--------------------------------------|----------------------------------|--------|
+| Phase 1 | `false` | `true` (recommended) or `false` | Installs cluster + ingress-nginx + cert-manager CRDs |
+| Phase 2 | `true` | keep previous value | Creates ClusterIssuer and requests TLS certificates |
+| Phase 3 (optional) | `true` | `false` | Starts tagging-server pods if rollout was deferred |
+
+If you do not defer rollout, use:
+- Phase 1: `create_letsencrypt_cluster_issuer = false`, `defer_tagging_server_rollout = false`
+- Phase 2: `create_letsencrypt_cluster_issuer = true`, `defer_tagging_server_rollout = false`
 
 ### About the `letsencrypt_email` address
 
@@ -166,35 +184,10 @@ The email address provided in `letsencrypt_email` is used by Let's Encrypt for:
 You do **not** need to pre-register or create an account with Let's Encrypt. The cert-manager 
 automatically handles all ACME protocol interactions when requesting certificates.
 
-### If you need to defer the tagging server
+### Deferred rollout recommendation
 
-The `defer_tagging_server_rollout` flag is useful if you want to verify that the preview 
-HTTPS endpoint is working before starting tagging-server pods. Here's the workflow:
-
-```hcl
-# First two phases with deferred startup:
-defer_tagging_server_rollout = true
-create_letsencrypt_cluster_issuer = false  # Phase 1
-```
-→ `terraform apply`  (deploys cluster, ingress, cert-manager)
-
-Then update DNS A records and wait for certificates to be issued.
-
-```hcl
-# Phase 2 after DNS is ready:
-defer_tagging_server_rollout = true
-create_letsencrypt_cluster_issuer = true  # Enable issuer
-```
-→ `terraform apply`  (creates certificates)
-
-Verify preview works with `https://preview_server_host` in your browser.
-
-```hcl
-# Phase 3 after preview is confirmed working:
-defer_tagging_server_rollout = false  # Enable tagging server
-create_letsencrypt_cluster_issuer = true
-```
-→ `terraform apply`  (starts tagging-server pods)
+Use `defer_tagging_server_rollout = true` for first-time environments when DNS and TLS are still 
+propagating. This avoids starting tagging-server pods before preview HTTPS is fully reachable.
 
 ## Variables
 
@@ -233,6 +226,7 @@ A fully annotated example is provided in [`terraform.tfvars.example`](./terrafor
 | `preview_server_public_enabled` | `true` | Create an OVH public LoadBalancer service for preview-server (redundant when HTTPS ingress enabled) |
 | `defer_tagging_server_rollout` | `false` | Set to `true` if DNS/TLS not ready on first deploy – keeps tagging-server at 0 replicas until Step 3 is complete |
 | `create_letsencrypt_cluster_issuer` | `false` | **Phase 2 toggle:** Set to `true` on second apply to activate Let's Encrypt certificate provisioning |
+| `helm_release_timeout_seconds` | `900` | Helm install/upgrade timeout for ingress-nginx and cert-manager. Increase on new/slower clusters if you see `context deadline exceeded`. |
 | `preview_server_url` | `""` | (Deprecated) Only used if HTTPS ingress is manually disabled; use hostnames instead |
 
 ## Outputs
@@ -262,6 +256,23 @@ terraform destroy
 > workloads. Ensure you have backed up any data before proceeding.
 
 ## Troubleshooting
+
+### Error: Helm release error (`context deadline exceeded`)
+
+On brand-new clusters, ingress-nginx or cert-manager can take longer than Helm's default timeout
+while LoadBalancers, webhooks, and controller pods become ready.
+
+Set a higher timeout in `terraform.tfvars`, for example:
+
+```hcl
+helm_release_timeout_seconds = 1200
+```
+
+Then run:
+
+```bash
+terraform apply
+```
 
 ### Error: Unexpected Identity Change (kubernetes provider)
 

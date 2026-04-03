@@ -10,6 +10,8 @@ resource "helm_release" "ingress_nginx" {
   chart            = "ingress-nginx"
   namespace        = var.ingress_nginx_namespace
   create_namespace = true
+  wait             = true
+  timeout          = var.helm_release_timeout_seconds
 
   set = [
     {
@@ -37,6 +39,8 @@ resource "helm_release" "cert_manager" {
   chart            = "cert-manager"
   namespace        = var.cert_manager_namespace
   create_namespace = true
+  wait             = true
+  timeout          = var.helm_release_timeout_seconds
 
   set = [
     {

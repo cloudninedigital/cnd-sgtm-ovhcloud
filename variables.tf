@@ -172,6 +172,12 @@ variable "create_letsencrypt_cluster_issuer" {
   default     = false
 }
 
+variable "helm_release_timeout_seconds" {
+  description = "Timeout in seconds for Helm releases (ingress-nginx and cert-manager). Increase on slower/new clusters to avoid context deadline exceeded."
+  type        = number
+  default     = 900
+}
+
 variable "preview_server_url" {
   description = "HTTPS URL of the preview server used by tagging-server pods (for example https://preview.example.com)."
   type        = string

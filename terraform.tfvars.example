@@ -45,6 +45,9 @@ letsencrypt_email    = "ops@example.com"
 tagging_server_host  = "sgtm.example.com"
 preview_server_host  = "preview.example.com"
 
+# Helm timeout for ingress-nginx/cert-manager install on slower or brand-new clusters
+helm_release_timeout_seconds = 1200
+
 # Option A (manual): set a public HTTPS preview URL directly.
 # preview_server_url = "https://preview.example.com"
 
