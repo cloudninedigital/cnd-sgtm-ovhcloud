@@ -125,7 +125,7 @@ requests SSL certificates for both your DNS hostnames. Let's Encrypt validates D
 - Both your tagging server and preview server are now accessible via HTTPS
 - Your sGTM container automatically detects the preview server HTTPS URL and configures it
 
-Verify certificate status:
+Verify certificate status by navigating to https://<yourhost> or by checking certificate status directly:
 ```bash
 kubectl get certificate -n sgtm
 kubectl describe certificate tagging-server-tls -n sgtm
@@ -232,27 +232,14 @@ A fully annotated example is provided in [`terraform.tfvars.example`](./terrafor
 
 | Output | Description |
 |--------|-------------|
-| `ingress_controller_load_balancer_ip` | **Primary:** Public IP of ingress-nginx controller; set your DNS A records to point here (Step 2) |
-| `ingress_controller_load_balancer_hostname` | Public hostname of ingress-nginx controller when OVHCloud returns one |
-| `tagging_server_https_url` | HTTPS endpoint for tagging server (available after certificates are issued in Step 3) |
-| `preview_server_https_url` | HTTPS endpoint for preview server (available after certificates are issued in Step 3) |
-| `tagging_server_load_balancer_ip` | (Deprecated) Legacy IP for standalone tagging LB service; use ingress IP instead |
-| `tagging_server_public_url` | (Deprecated) Legacy URL via standalone LB; use ingress HTTPS URL instead |
-| `preview_server_load_balancer_ip` | (Deprecated) Legacy IP for standalone preview LB service; use ingress IP instead |
-| `preview_server_cluster_ip` | Internal cluster IP of the preview server |
-| `preview_server_public_url` | (Deprecated) Legacy URL via standalone LB; use ingress HTTPS URL instead |
-| `cluster_id` | OVHCloud cluster ID |
+| `cluster_id` | OVHCloud Kubernetes cluster ID |
+| `cluster_status` | Current status of the OVHCloud Kubernetes cluster |
 | `kubernetes_version` | Running Kubernetes version |
+| `tagging_server_public_url` | Public HTTP URL for tagging server via its LoadBalancer service (hostname first, then nip.io fallback, otherwise pending message) |
+| `tagging_server_https_url` | HTTPS endpoint for tagging server when `enable_https_ingress = true` |
+| `preview_server_https_url` | HTTPS endpoint for preview server when `enable_https_ingress = true` |
+| `ingress_controller_load_balancer_ip` | **Primary:** Public IP of ingress-nginx controller; set your DNS A records to point here (Step 2) |
 | `namespace` | Kubernetes namespace used (default: `sgtm`) |
-
-## Destroying the infrastructure
-
-```bash
-terraform destroy
-```
-
-> **Warning:** This will delete the Kubernetes cluster, node pool, and all deployed
-> workloads. Ensure you have backed up any data before proceeding.
 
 ## Troubleshooting
 
