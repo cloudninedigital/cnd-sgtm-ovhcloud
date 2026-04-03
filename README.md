@@ -71,13 +71,12 @@ cd cnd-sgtm-ovhcloud
 
 # 2. Create your variable file
 cp terraform.tfvars.example terraform.tfvars
-
-# 3. Edit terraform.tfvars and fill in all REPLACE_WITH_* placeholders, including:
-#    - OVH credentials (ovh_application_key, ovh_application_secret, ovh_consumer_key)
-#    - GTM container config string
-#    - Your email address for letsencrypt_email
-#    - Two DNS hostnames for tagging_server_host and preview_server_host
 ```
+3. Edit terraform.tfvars and fill in all REPLACE_WITH_* placeholders, including:
+    - OVH credentials (ovh_application_key, ovh_application_secret, ovh_consumer_key)
+    - GTM container config string
+    - Your email address for letsencrypt_email
+    - Two DNS hostnames for tagging_server_host and preview_server_host
 
 ### Step 2: Initial infrastructure and certificate provisioning (Create CRDs)
 

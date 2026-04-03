@@ -41,14 +41,14 @@ container_config = "REPLACE_WITH_GTM_CONTAINER_CONFIG"
 
 # Optional HTTPS automation (ingress-nginx + cert-manager + Let's Encrypt)
 enable_https_ingress = true
-letsencrypt_email    = "ops@example.com"
-tagging_server_host  = "sgtm.example.com"
-preview_server_host  = "preview.example.com"
+letsencrypt_email    = "ops@example.com" # REPLACE WITH YOUR EMAIL (no signup required)
+tagging_server_host  = "sgtm.example.com" # REPLACE WITH YOUR TAGGING SERVER HOSTNAME
+preview_server_host  = "preview.example.com" # REPLACE WITH YOUR PREVIEW SERVER HOSTNAME
 
 # Helm timeout for ingress-nginx/cert-manager install on slower or brand-new clusters
 helm_release_timeout_seconds = 1200
 
-# Option A (manual): set a public HTTPS preview URL directly.
+# Option B (manual): set a public HTTPS preview URL directly (only if not choosing option A).
 # preview_server_url = "https://preview.example.com"
 
 
