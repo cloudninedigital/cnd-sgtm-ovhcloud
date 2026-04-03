@@ -108,10 +108,10 @@ sst-ovh-preview.cloudninedigital.nl   →  51.x.x.x
 ### Step 3: Enable certificate issuer (Activate Let's Encrypt)
 
 ```bash
-# 1. Edit terraform.tfvars: change create_letsencrypt_cluster_issuer from false to true
+# 6. Edit terraform.tfvars: change create_letsencrypt_cluster_issuer from false to true
 #    create_letsencrypt_cluster_issuer = true
 
-# 2. Second apply: creates Let's Encrypt ClusterIssuer and Ingress certificates
+# 7. Second apply: creates Let's Encrypt ClusterIssuer and Ingress certificates
 terraform apply
 ```
 
