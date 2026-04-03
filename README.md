@@ -125,7 +125,10 @@ requests SSL certificates for both your DNS hostnames. Let's Encrypt validates D
 - Both your tagging server and preview server are now accessible via HTTPS
 - Your sGTM container automatically detects the preview server HTTPS URL and configures it
 
-Verify certificate status by navigating to https://<yourhost> or by checking certificate status directly:
+Verify certificate status by navigating to https://<yourhost>. 
+
+
+potential troubleshooting can be done through:  
 ```bash
 kubectl get certificate -n sgtm
 kubectl describe certificate tagging-server-tls -n sgtm
