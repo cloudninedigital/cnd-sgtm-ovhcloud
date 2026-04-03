@@ -40,7 +40,7 @@ container_config = "REPLACE_WITH_GTM_CONTAINER_CONFIG"
 # Option A (automated): enable HTTPS ingress below and this URL is derived from preview_server_host.
 
 # Optional HTTPS automation (ingress-nginx + cert-manager + Let's Encrypt)
-enable_https_ingress = false
+enable_https_ingress = true
 letsencrypt_email    = "ops@example.com"
 tagging_server_host  = "sgtm.example.com"
 preview_server_host  = "preview.example.com"
@@ -66,7 +66,7 @@ tagging_server_cpu_target_utilization  = 70
 
 # Set true for first deployment if preview DNS/TLS is not ready yet.
 # This creates the deployment but keeps it at 0 replicas (and disables HPA).
-defer_tagging_server_rollout           = false
+defer_tagging_server_rollout           = true
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Preview server
